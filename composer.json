@@ -7,9 +7,14 @@
     "authors": [
         {
             "name": "Enes Ekinci",
-            "email": "enesekinci@users.noreply.github.com"
+            "homepage": "https://github.com/enesekinci"
         }
     ],
+    "homepage": "https://github.com/enesekinci/laravel-livewire-rich-text",
+    "support": {
+        "issues": "https://github.com/enesekinci/laravel-livewire-rich-text/issues",
+        "source": "https://github.com/enesekinci/laravel-livewire-rich-text"
+    },
     "require": {
         "php": "^8.2",
         "illuminate/support": "^11.0|^12.0|^13.0",
