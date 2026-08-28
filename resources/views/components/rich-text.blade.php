@@ -11,193 +11,209 @@
     $uploadUrl = route('rich-text.upload');
 @endphp
 
+@once
+    <script>
+        window.richTextEditor = function (config) {
+            let editor = null
+
+            return {
+                value: config.value,
+                uploadUrl: config.uploadUrl,
+                placeholder: config.placeholder,
+                enableImages: config.enableImages,
+                updatedAt: Date.now(),
+                loading: true,
+                uploading: false,
+                error: null,
+
+                async init() {
+                        try {
+                            const [
+                                { Editor },
+                                { default: StarterKit },
+                                { default: Link },
+                                { default: Placeholder },
+                                { default: Underline },
+                                { default: TextAlign },
+                                { default: Highlight },
+                                { default: Image },
+                            ] = await Promise.all([
+                                import('https://esm.sh/@tiptap/core@2.11.7'),
+                                import('https://esm.sh/@tiptap/starter-kit@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-link@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-placeholder@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-underline@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-text-align@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-highlight@2.11.7'),
+                                import('https://esm.sh/@tiptap/extension-image@2.11.7'),
+                            ])
+
+                            const self = this
+                            const extensions = [
+                                StarterKit.configure({
+                                    heading: { levels: [2, 3] },
+                                }),
+                                Underline,
+                                Highlight.configure({ multicolor: false }),
+                                TextAlign.configure({ types: ['heading', 'paragraph'] }),
+                                Link.configure({
+                                    openOnClick: false,
+                                    HTMLAttributes: {
+                                        class: 'rt-link',
+                                        rel: 'noopener noreferrer',
+                                        target: '_blank',
+                                    },
+                                }),
+                                Placeholder.configure({
+                                    placeholder: this.placeholder,
+                                }),
+                            ]
+
+                            if (this.enableImages) {
+                                extensions.push(Image.configure({
+                                    allowBase64: false,
+                                    HTMLAttributes: { class: 'rt-image' },
+                                }))
+                            }
+
+                            editor = new Editor({
+                                element: this.$refs.element,
+                                extensions,
+                                content: this.value || '',
+                                editorProps: {
+                                    attributes: { class: 'rt-prose' },
+                                },
+                                onUpdate({ editor: ed }) {
+                                    self.value = ed.getHTML()
+                                    self.updatedAt = Date.now()
+                                },
+                                onSelectionUpdate() {
+                                    self.updatedAt = Date.now()
+                                },
+                                onCreate() {
+                                    self.updatedAt = Date.now()
+                                },
+                            })
+
+                            this.$watch('value', (html) => {
+                                if (! editor || editor.isDestroyed) return
+                                if (html === editor.getHTML()) return
+                                editor.commands.setContent(html || '', false)
+                            })
+                        } catch (e) {
+                            this.error = 'Editör yüklenemedi. İnternet / CDN erişimini kontrol edin.'
+                            console.error(e)
+                        } finally {
+                            this.loading = false
+                        }
+                    },
+
+                    destroy() {
+                        editor?.destroy()
+                        editor = null
+                    },
+
+                    isActive(type, opts = {}) {
+                        this.updatedAt
+                        return editor?.isActive(type, opts) ?? false
+                    },
+
+                    canUndo() {
+                        this.updatedAt
+                        return editor?.can().undo() ?? false
+                    },
+
+                    canRedo() {
+                        this.updatedAt
+                        return editor?.can().redo() ?? false
+                    },
+
+                    run(callback) {
+                        if (! editor) return
+                        callback(editor)
+                        this.updatedAt = Date.now()
+                    },
+
+                    setLink() {
+                        if (! editor) return
+                        const previous = editor.getAttributes('link').href || 'https://'
+                        const url = window.prompt('Bağlantı URL', previous)
+                        if (url === null) return
+                        if (url === '') {
+                            editor.chain().focus().extendMarkRange('link').unsetLink().run()
+                            return
+                        }
+                        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+                        this.updatedAt = Date.now()
+                    },
+
+                    setImageUrl() {
+                        if (! editor || ! this.enableImages) return
+                        const url = window.prompt('Resim URL', 'https://')
+                        if (! url) return
+                        editor.chain().focus().setImage({ src: url }).run()
+                        this.updatedAt = Date.now()
+                    },
+
+                    pickImage() {
+                        if (! this.enableImages || this.uploading) return
+                        this.$refs.imageInput?.click()
+                    },
+
+                    async uploadImage(event) {
+                        if (! editor || ! this.enableImages) return
+                        const file = event.target.files?.[0]
+                        event.target.value = ''
+                        if (! file) return
+
+                        this.uploading = true
+                        try {
+                            const body = new FormData()
+                            body.append('image', file)
+
+                            const token = document.querySelector('meta[name=csrf-token]')?.content || ''
+                            const response = await fetch(this.uploadUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': token,
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                                credentials: 'same-origin',
+                                body,
+                            })
+
+                            const data = await response.json().catch(() => ({}))
+                            if (! response.ok) {
+                                throw new Error(data.message || 'Yükleme başarısız.')
+                            }
+                            if (! data.url) {
+                                throw new Error('Sunucu URL döndürmedi.')
+                            }
+
+                            editor.chain().focus().setImage({ src: data.url }).run()
+                            this.updatedAt = Date.now()
+                        } catch (e) {
+                            window.alert(e.message || 'Resim yüklenemedi.')
+                            console.error(e)
+                        } finally {
+                            this.uploading = false
+                        }
+                    },
+            }
+        }
+    </script>
+@endonce
+
 <div
     wire:ignore
     style="--rt-accent: {{ $accent }}; --rt-min-h: {{ $minHeight }};"
-    x-data="(() => {
-        let editor = null
-
-        return {
-            value: @entangle($model).live,
-            updatedAt: Date.now(),
-            loading: true,
-            uploading: false,
-            error: null,
-            uploadUrl: {{ \Illuminate\Support\Js::from($uploadUrl) }},
-            enableImages: {{ $enableImages ? 'true' : 'false' }},
-
-            async init() {
-                try {
-                    const [
-                        { Editor },
-                        { default: StarterKit },
-                        { default: Link },
-                        { default: Placeholder },
-                        { default: Underline },
-                        { default: TextAlign },
-                        { default: Highlight },
-                        { default: Image },
-                    ] = await Promise.all([
-                        import('https://esm.sh/@tiptap/core@2.11.7'),
-                        import('https://esm.sh/@tiptap/starter-kit@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-link@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-placeholder@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-underline@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-text-align@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-highlight@2.11.7'),
-                        import('https://esm.sh/@tiptap/extension-image@2.11.7'),
-                    ])
-
-                    const self = this
-                    const extensions = [
-                        StarterKit.configure({
-                            heading: { levels: [2, 3] },
-                        }),
-                        Underline,
-                        Highlight.configure({ multicolor: false }),
-                        TextAlign.configure({ types: ['heading', 'paragraph'] }),
-                        Link.configure({
-                            openOnClick: false,
-                            HTMLAttributes: { class: 'rt-link', rel: 'noopener noreferrer', target: '_blank' },
-                        }),
-                        Placeholder.configure({
-                            placeholder: {{ \Illuminate\Support\Js::from($placeholder) }},
-                        }),
-                    ]
-
-                    if (this.enableImages) {
-                        extensions.push(Image.configure({
-                            allowBase64: false,
-                            HTMLAttributes: { class: 'rt-image' },
-                        }))
-                    }
-
-                    editor = new Editor({
-                        element: this.$refs.element,
-                        extensions,
-                        content: this.value || '',
-                        editorProps: {
-                            attributes: { class: 'rt-prose' },
-                        },
-                        onUpdate({ editor: ed }) {
-                            self.value = ed.getHTML()
-                            self.updatedAt = Date.now()
-                        },
-                        onSelectionUpdate() {
-                            self.updatedAt = Date.now()
-                        },
-                        onCreate() {
-                            self.updatedAt = Date.now()
-                        },
-                    })
-
-                    this.$watch('value', (html) => {
-                        if (! editor || editor.isDestroyed) return
-                        if (html === editor.getHTML()) return
-                        editor.commands.setContent(html || '', false)
-                    })
-                } catch (e) {
-                    this.error = 'Editör yüklenemedi. İnternet / CDN erişimini kontrol edin.'
-                    console.error(e)
-                } finally {
-                    this.loading = false
-                }
-            },
-
-            destroy() {
-                editor?.destroy()
-                editor = null
-            },
-
-            isActive(type, opts = {}) {
-                this.updatedAt
-                return editor?.isActive(type, opts) ?? false
-            },
-
-            canUndo() {
-                this.updatedAt
-                return editor?.can().undo() ?? false
-            },
-
-            canRedo() {
-                this.updatedAt
-                return editor?.can().redo() ?? false
-            },
-
-            run(callback) {
-                if (! editor) return
-                callback(editor)
-                this.updatedAt = Date.now()
-            },
-
-            setLink() {
-                if (! editor) return
-                const previous = editor.getAttributes('link').href || 'https://'
-                const url = window.prompt('Bağlantı URL', previous)
-                if (url === null) return
-                if (url === '') {
-                    editor.chain().focus().extendMarkRange('link').unsetLink().run()
-                    return
-                }
-                editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-                this.updatedAt = Date.now()
-            },
-
-            setImageUrl() {
-                if (! editor || ! this.enableImages) return
-                const url = window.prompt('Resim URL', 'https://')
-                if (! url) return
-                editor.chain().focus().setImage({ src: url }).run()
-                this.updatedAt = Date.now()
-            },
-
-            pickImage() {
-                if (! this.enableImages || this.uploading) return
-                this.$refs.imageInput?.click()
-            },
-
-            async uploadImage(event) {
-                if (! editor || ! this.enableImages) return
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (! file) return
-
-                this.uploading = true
-                try {
-                    const body = new FormData()
-                    body.append('image', file)
-
-                    const token = document.querySelector('meta[name=\"csrf-token\"]')?.content
-                    const response = await fetch(this.uploadUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': token || '',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        credentials: 'same-origin',
-                        body,
-                    })
-
-                    const data = await response.json().catch(() => ({}))
-                    if (! response.ok) {
-                        throw new Error(data.message || 'Yükleme başarısız.')
-                    }
-                    if (! data.url) {
-                        throw new Error('Sunucu URL döndürmedi.')
-                    }
-
-                    editor.chain().focus().setImage({ src: data.url }).run()
-                    this.updatedAt = Date.now()
-                } catch (e) {
-                    window.alert(e.message || 'Resim yüklenemedi.')
-                    console.error(e)
-                } finally {
-                    this.uploading = false
-                }
-            },
-        }
-    })()"
+    x-data="richTextEditor({
+        value: @entangle($model).live,
+        uploadUrl: {{ \Illuminate\Support\Js::from($uploadUrl) }},
+        placeholder: {{ \Illuminate\Support\Js::from($placeholder) }},
+        enableImages: {{ $enableImages ? 'true' : 'false' }},
+    })"
     {{ $attributes->whereDoesntStartWith('wire:model')->class(['relative block space-y-1.5']) }}
 >
     @if ($label)
@@ -223,7 +239,7 @@
 
             <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleBold().run())" :class="{ 'rt-btn-active': isActive('bold') }" title="Kalın"><strong>B</strong></button>
             <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleItalic().run())" :class="{ 'rt-btn-active': isActive('italic') }" title="İtalik"><em>I</em></button>
-            <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleUnderline().run())" :class="{ 'rt-btn-active': isActive('underline') }" title="Altı çizili"><span style="text-decoration:underline">U</span></button>
+            <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleUnderline().run())" :class="{ 'rt-btn-active': isActive('underline') }" title="Altı çizili"><span class="underline">U</span></button>
             <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleStrike().run())" :class="{ 'rt-btn-active': isActive('strike') }" title="Üstü çizili"><s>S</s></button>
             <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleHighlight().run())" :class="{ 'rt-btn-active': isActive('highlight') }" title="Vurgula">Vurgu</button>
             <button type="button" class="rt-btn" @click="run(e => e.chain().focus().toggleCode().run())" :class="{ 'rt-btn-active': isActive('code') }" title="Satır içi kod">Kod</button>
