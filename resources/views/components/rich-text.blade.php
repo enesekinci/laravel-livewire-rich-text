@@ -31,13 +31,14 @@
                     async init() {
                         this._onMediaSelected = (e) => {
                             const detail = e.detail || {}
-                            if (this._mediaRequestId && detail.requestId && detail.requestId !== this._mediaRequestId) {
+                            // Only the editor instance that opened the picker may insert.
+                            if (! this._mediaRequestId || ! detail.requestId || detail.requestId !== this._mediaRequestId) {
                                 return
                             }
                             if (! detail.url || ! editor) return
+                            this._mediaRequestId = null
                             editor.chain().focus().setImage({ src: detail.url }).run()
                             this.updatedAt = Date.now()
-                            this._mediaRequestId = null
                         }
                         window.addEventListener('media-selected', this._onMediaSelected)
 
