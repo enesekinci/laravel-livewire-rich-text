@@ -7,7 +7,8 @@ return [
     | Upload disk & directory
     |--------------------------------------------------------------------------
     */
-    'disk' => env('RICH_TEXT_DISK', 'public'),
+    // Prefer R2/S3 in apps that set RICH_TEXT_DISK or FILESYSTEM_DISK=s3.
+    'disk' => env('RICH_TEXT_DISK', env('FILESYSTEM_DISK', 'public')),
     'directory' => env('RICH_TEXT_DIRECTORY', 'rich-text'),
 
     /*

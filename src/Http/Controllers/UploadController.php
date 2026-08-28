@@ -28,7 +28,8 @@ class UploadController extends Controller
         $disk = (string) config('rich-text.disk', 'public');
         $directory = trim((string) config('rich-text.directory', 'rich-text'), '/');
 
-        $path = $validated['image']->store($directory, $disk);
+        // storePublicly so R2/S3 objects are readable via the public CDN URL.
+        $path = $validated['image']->storePublicly($directory, $disk);
         $url = Storage::disk($disk)->url($path);
 
         return response()->json([
