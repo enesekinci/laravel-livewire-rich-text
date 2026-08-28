@@ -23,10 +23,24 @@
                 enableImages: config.enableImages,
                 updatedAt: Date.now(),
                 loading: true,
-                uploading: false,
-                error: null,
+                    uploading: false,
+                    error: null,
+                    _mediaRequestId: null,
+                    _onMediaSelected: null,
 
-                async init() {
+                    async init() {
+                        this._onMediaSelected = (e) => {
+                            const detail = e.detail || {}
+                            if (this._mediaRequestId && detail.requestId && detail.requestId !== this._mediaRequestId) {
+                                return
+                            }
+                            if (! detail.url || ! editor) return
+                            editor.chain().focus().setImage({ src: detail.url }).run()
+                            this.updatedAt = Date.now()
+                            this._mediaRequestId = null
+                        }
+                        window.addEventListener('media-selected', this._onMediaSelected)
+
                         try {
                             const [
                                 { Editor },
@@ -109,6 +123,9 @@
                     },
 
                     destroy() {
+                        if (this._onMediaSelected) {
+                            window.removeEventListener('media-selected', this._onMediaSelected)
+                        }
                         editor?.destroy()
                         editor = null
                     },
@@ -156,49 +173,11 @@
                     },
 
                     pickImage() {
-                        if (! this.enableImages || this.uploading) return
-                        this.$refs.imageInput?.click()
-                    },
-
-                    async uploadImage(event) {
-                        if (! editor || ! this.enableImages) return
-                        const file = event.target.files?.[0]
-                        event.target.value = ''
-                        if (! file) return
-
-                        this.uploading = true
-                        try {
-                            const body = new FormData()
-                            body.append('image', file)
-
-                            const token = document.querySelector('meta[name=csrf-token]')?.content || ''
-                            const response = await fetch(this.uploadUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': token,
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                },
-                                credentials: 'same-origin',
-                                body,
-                            })
-
-                            const data = await response.json().catch(() => ({}))
-                            if (! response.ok) {
-                                throw new Error(data.message || 'Yükleme başarısız.')
-                            }
-                            if (! data.url) {
-                                throw new Error('Sunucu URL döndürmedi.')
-                            }
-
-                            editor.chain().focus().setImage({ src: data.url }).run()
-                            this.updatedAt = Date.now()
-                        } catch (e) {
-                            window.alert(e.message || 'Resim yüklenemedi.')
-                            console.error(e)
-                        } finally {
-                            this.uploading = false
-                        }
+                        if (! this.enableImages) return
+                        this._mediaRequestId = 'rt-' + Math.random().toString(36).slice(2)
+                        window.dispatchEvent(new CustomEvent('open-media-picker', {
+                            detail: { requestId: this._mediaRequestId },
+                        }))
                     },
             }
         }
@@ -219,14 +198,6 @@
     @if ($label)
         <span class="text-sm font-medium text-slate-600">{{ $label }}</span>
     @endif
-
-    <input
-        type="file"
-        x-ref="imageInput"
-        class="hidden"
-        accept="image/jpeg,image/png,image/gif,image/webp"
-        @change="uploadImage($event)"
-    >
 
     <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div
@@ -265,9 +236,7 @@
 
             <template x-if="enableImages">
                 <span class="inline-flex gap-1">
-                    <button type="button" class="rt-btn" @click="pickImage()" :disabled="uploading" title="Resim yükle">
-                        <span x-text="uploading ? 'Yükleniyor…' : 'Resim'"></span>
-                    </button>
+                    <button type="button" class="rt-btn" @click="pickImage()" title="Medya yöneticisi">Resim</button>
                     <button type="button" class="rt-btn" @click="setImageUrl()" title="Resim URL">URL</button>
                 </span>
             </template>
