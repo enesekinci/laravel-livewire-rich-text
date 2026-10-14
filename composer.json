@@ -3,7 +3,15 @@
     "description": "TipTap-based rich text editor for Laravel Livewire (wire:ignore + Alpine + wire:model).",
     "type": "library",
     "license": "MIT",
-    "keywords": ["laravel", "livewire", "tiptap", "richtext", "wysiwyg", "editor", "alpine"],
+    "keywords": [
+        "laravel",
+        "livewire",
+        "tiptap",
+        "richtext",
+        "wysiwyg",
+        "editor",
+        "alpine"
+    ],
     "authors": [
         {
             "name": "Enes Ekinci",
@@ -34,5 +42,6 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "version": "1.2.1"
 }
