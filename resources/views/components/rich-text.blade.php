@@ -16,7 +16,7 @@
     wire:ignore
     style="--rt-accent: {{ $accent }}; --rt-min-h: {{ $minHeight }};"
     x-data="richTextEditor({
-        value: @entangle($model)@if (! $model instanceof \Livewire\WireDirective || ! $model->hasModifier('live')).live@endif,
+        value: @entangle($model),
         uploadUrl: {{ \Illuminate\Support\Js::from($uploadUrl) }},
         placeholder: {{ \Illuminate\Support\Js::from($placeholder) }},
         enableImages: {{ $enableImages ? 'true' : 'false' }},
